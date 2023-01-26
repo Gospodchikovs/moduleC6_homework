@@ -29,13 +29,11 @@
             border-color: #bad7ec;
             padding: 5px;
             overflow: auto;
-            justify-content: revert;
-
         }
         .chat-msg {
             border-color: #bad7ec;
             border-style: solid;
-            border-radius: 5px;
+            border-radius: 7px;
             max-width: 200px;
             width: 60%;
             padding: 10px;
@@ -43,10 +41,10 @@
             word-wrap: break-word;
         }
         .chat-query {
-            align-self: flex-end;
+            align-self: flex-end;           /* слева ответы от сервера */
         }
         .chat-answer {
-            align-self: flex-start;
+            align-self: flex-start;         /* справа запросы к серверу*/
         }
         .chat-query a {
             color: #87aed7;
@@ -58,7 +56,7 @@
 </head>
 <body>
     <form class="msg">
-        <input class="msg-text" type="text" placeholder="Здесь вводится текст сообщения">
+        <input class="msg-text" required type="text" placeholder="Здесь вводится текст сообщения">
         <button class="msg-send">Отправить</button>
         <button class="msg-geo">Геолокация</button>
     </form>
@@ -66,53 +64,55 @@
     <script>
         const urlWss = "wss://echo-ws-service.herokuapp.com";
         const urlMap = "https://www.openstreetmap.org/#map=18";
-        const chat = document.querySelector(".chat");
-        const btnSend = document.querySelector(".msg-send")
-        const btnGeo = document.querySelector(".msg-geo")
-        const message = document.querySelector(".msg-text")
-        const geoKey = "ajshdasbdjshcwejchweqjwhdqv";       //произвольный ключ для идентификации ответа с геопозицией
+        const chat = document.querySelector(".chat");       // основное окно
+        const btnSend = document.querySelector(".msg-send") // кнопка "Отправить"
+        const btnGeo = document.querySelector(".msg-geo")   // кнопка "Геолокация"
+        const message = document.querySelector(".msg-text") // текст сообщения
+        const geoKey = "ajshdasbdjshcwejchweqjwhdqv";       // произвольный ключ для фильтрации ответа с геопозицией
+        let wSocket = new WebSocket(urlWss);
 
-        function writeToScreen(elementClass, message) {
+        function showMessage(elementClass, sourceMsg) {
+            // elementClass - дополнительный класс, в зависимости от типа сообщения - запрос, ответ, ошибка, геолокация
+            // message - выводимое сообщение,
             let msg = document.createElement("div");
             msg.classList.add("chat-msg");          //основной класс
-            msg.classList.add(elementClass);        // дополнительный класс
-            msg.innerHTML = message;
+            msg.classList.add(elementClass);
+            msg.innerHTML = sourceMsg;
             chat.appendChild(msg);
             chat.scrollTop = 1e9;                   // прокручиваем окно вниз до конца
         }
 
-        let wSocket;
-        wSocket = new WebSocket(urlWss);
-        wSocket.onmessage = function(event) {
+        wSocket.onmessage = event => {
             if (event.data.indexOf(geoKey) === -1) {    // исключаем сообщение с геолокацией из ответов сервера
-                writeToScreen("chat-answer", event.data);
+                showMessage("chat-answer", event.data);
             }
         }
-        wSocket.onerror = function(event) {
-            writeToScreen("chat-err", "Ошибка: " + event.data);
-        };
 
-        btnSend.addEventListener('click',(event) => {
-            event.preventDefault();
+        wSocket.onerror = event => showMessage("chat-err", "Ошибка: " + event.data);
+
+        btnSend.addEventListener('click', event => {
             const msg = message.value;
-            writeToScreen("chat-query", msg);
-            wSocket.send(msg);
-  g          message.value = "";
+            if (msg !== '') {
+                event.preventDefault();
+                showMessage("chat-query", msg);
+                wSocket.send(msg);
+                message.value = "";
+            }
         });
 
-        btnGeo.addEventListener('click',(event) => {
+        btnGeo.addEventListener('click', event => {
             event.preventDefault();
             if ("geolocation" in navigator) {
-                navigator.geolocation.getCurrentPosition((position) => {
+                navigator.geolocation.getCurrentPosition(position => {
                     const { coords } = position;
                     const coordinates = `${coords.latitude}/${coords.longitude}`;
                     wSocket.send(geoKey+coordinates);
                     const mapUrl = `<a href="${urlMap}/${coordinates}" target="_blank">Геолокация</a>`;
-                    writeToScreen("chat-query", mapUrl);
+                    showMessage("chat-query", mapUrl);
                 }, error => {
-                    if (error.code === 1) writeToScreen("chat-query", "Пользователь запретил доступ к данным!");
+                    if (error.code === 1) showMessage("chat-err", "Пользователь запретил доступ к геолокации!");
                 });
-            } else writeToScreen("chat-query", "Геолокация не поддерживается!");
+            } else showMessage("chat-err", "Геолокация не поддерживается!");
         });
     </script>
 </body>
